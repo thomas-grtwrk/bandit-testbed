@@ -18,13 +18,23 @@ all_runs = []
 all_optimal_actions = []
 all_optimal_bandit_options = []
 
-epsilon = 0
+epsilon = .05
 set_optimistic_values = 0
-gradient_bandit = 1
+gradient_bandit = 0
 alpha = .1
 
+def choose_max(choices):
+    max_indexs = np.argwhere(choices == np.amax(choices))
+    max_indexs = max_indexs.flatten().tolist()
+    number_of_max = len(max_indexs)
+    if number_of_max == 1:
+        return max_indexs[0]
+    else:
+        return random.randrange(number_of_max)
+    
+
 for sim in np.arange(0,1000,1):
-    mu, sigma = 4, 1.0 # mean and standard deviation
+    mu, sigma = 0, 1.0 # mean and standard deviation
     # Setting actual reward values from normal distribution with 10 bandits
     actual_reward_values = rg.normal(mu,sigma,10)
     
@@ -68,13 +78,13 @@ for sim in np.arange(0,1000,1):
         greward_selected = step_rewards.argmax() # index
         
         if gradient_bandit:
-            best_choice = step_rewards[gradient_estimates.argmax()]
-            best_choice_selected = gradient_estimates.argmax()
+            best_choice_selected = choose_max(gradient_estimates)
+            best_choice = step_rewards[best_choice_selected]
         # best estimate choice at every step
         else:
             if np.random.uniform() < 1.0-epsilon:
-                best_choice = step_rewards[choice_estimates.argmax()]
-                best_choice_selected = choice_estimates.argmax()
+                best_choice_selected = choose_max(choice_estimates)
+                best_choice = step_rewards[best_choice_selected]
             else:
                 random_choice  = random.randrange(10)
                 best_choice = step_rewards[random_choice]
@@ -117,6 +127,7 @@ for sim in np.arange(0,1000,1):
                     gradient_estimates[best_choice_selected] = gradient_estimates[best_choice_selected] + alpha*(best_choice-average_award)*(1-soft_max[best_choice_selected])
                 else:
                     gradient_estimates[index] = gradient_estimates[index] - alpha*(best_choice-average_award)*soft_max[index]
+        
         #print(choice_estimates)
         #print("gradient",gradient_estimates)
         #[best_choice_selected] = steps[best_choice_selected] + 1
@@ -130,7 +141,7 @@ for sim in np.arange(0,1000,1):
     all_optimal_actions.append(optimal_action)
     all_optimal_bandit_options.append(optimal_bandit_action)
     
-    
+#code.interact(local=locals())
 results = np.array(all_runs)
 results_average = results.mean(axis=0)
 #plt.plot(results_average)
@@ -153,6 +164,6 @@ axs[1].plot(per)
 axs[2].plot(oab_per)
 fig.suptitle('10-armed Bandit Testbed')
 axs[0].set_ylabel('Average Reward')
-axs[1].set_ylabel('Optimal Action')
-
+axs[1].set_ylabel('Optimal Value')
+axs[1].set_ylabel('Optimal Arm')
 
