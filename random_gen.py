@@ -18,8 +18,8 @@ all_runs = []
 all_optimal_actions = []
 all_optimal_bandit_options = []
 
-epsilon = .05
-set_optimistic_values = 0
+epsilon = 0
+set_optimistic_values = 1
 gradient_bandit = 0
 alpha = .1
 
@@ -27,10 +27,11 @@ def choose_max(choices):
     max_indexs = np.argwhere(choices == np.amax(choices))
     max_indexs = max_indexs.flatten().tolist()
     number_of_max = len(max_indexs)
+    #code.interact(banner="in choose max",local=locals())
     if number_of_max == 1:
         return max_indexs[0]
     else:
-        return random.randrange(number_of_max)
+        return max_indexs[random.randrange(number_of_max)]
     
 
 for sim in np.arange(0,1000,1):
@@ -52,6 +53,7 @@ for sim in np.arange(0,1000,1):
     
     if set_optimistic_values:
         choice_estimates = choice_estimates + np.percentile(rewards_array[optimal_bandit],99.5)
+        #print(choice_estimates)
     
     #print(choice_estimates)
     steps = np.zeros(10)
@@ -70,8 +72,6 @@ for sim in np.arange(0,1000,1):
     for step in np.arange(0,2000,1):
         # step through 10 sampled distributions one sample at a time
         step_rewards = rewards_array[:,step]
-        #print("actual_means",actual_reward_values)
-        #print("rewards",step_rewards)
         # all knowing oracle takes best solution every step
         greward = step_rewards.max() # value
         best_award.append(greward)
@@ -84,19 +84,17 @@ for sim in np.arange(0,1000,1):
         else:
             if np.random.uniform() < 1.0-epsilon:
                 best_choice_selected = choose_max(choice_estimates)
+                #code.interact(banner="choose",local=locals())
                 best_choice = step_rewards[best_choice_selected]
             else:
                 random_choice  = random.randrange(10)
                 best_choice = step_rewards[random_choice]
                 best_choice_selected = random_choice    
-        #print("best=",best_choice_selected,"optimal=",greward_selected)
         
         # gather optimal action %
         if best_choice_selected == greward_selected:
-            #print("True")
             optimal_action.append(1)
         else:
-            #print("False")
             optimal_action.append(0)
         if best_choice_selected == optimal_bandit:
             optimal_bandit_action.append(1)
@@ -108,15 +106,12 @@ for sim in np.arange(0,1000,1):
         #greedy_estimates[greward_selected] =  greedy_estimates[greward_selected] + 1/steps[greward_selected]*(greward-greedy_estimates[greward_selected])
         # build running tally of each arm estimates
         steps[best_choice_selected] = steps[best_choice_selected] + 1
-        #print(actual_reward_values)
-        #print(step_rewards)
         choice_estimates[best_choice_selected] = choice_estimates[best_choice_selected] + 1/steps[best_choice_selected]*(best_choice-choice_estimates[best_choice_selected])
         average_award = average_award + 1/(step+1)*(best_choice-average_award)
-        #print("average_award", average_award)
-        #print("choice",choice_estimates)
         
         # gradient bandit
         if gradient_bandit:
+            print("Why")
             e_sum = sum(math.e**np.array(gradient_estimates))
             #print("e_sum",e_sum)
             for index in np.arange(0,10,1):
@@ -129,13 +124,9 @@ for sim in np.arange(0,1000,1):
                     gradient_estimates[index] = gradient_estimates[index] - alpha*(best_choice-average_award)*soft_max[index]
         
         #print(choice_estimates)
-        #print("gradient",gradient_estimates)
-        #[best_choice_selected] = steps[best_choice_selected] + 1
-        #print(steps)
-        ##print(optimal_per)
-        #code.interact(local=locals())
-        greedy_average_award.append(greedy_estimates[greward_selected])
+        #greedy_average_award.append(greedy_estimates[greward_selected])
         choice_average_award.append(best_choice)
+        #code.interact(local=locals())
         
     all_runs.append(choice_average_award)
     all_optimal_actions.append(optimal_action)
@@ -165,5 +156,5 @@ axs[2].plot(oab_per)
 fig.suptitle('10-armed Bandit Testbed')
 axs[0].set_ylabel('Average Reward')
 axs[1].set_ylabel('Optimal Value')
-axs[1].set_ylabel('Optimal Arm')
+axs[2].set_ylabel('Optimal Arm')
 
