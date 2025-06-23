@@ -33,8 +33,9 @@ def choose_max(choices):
         return max_indexs[0]
     else:
         return max_indexs[random.randrange(number_of_max)]
+      
     
-def create_drift(steps, reversion=True):
+def create_drift(steps, reversion=False, abrupt_change=True):
     
     mu, sigma = 0, 1.0 # mean and standard deviation
     initial_reward_values = rg.normal(mu,sigma,10)
@@ -52,17 +53,30 @@ def create_drift(steps, reversion=True):
             bandit_drifts[:,step] = .5 * bandit_drifts[:,step-1] + bandit_drifts[:,step]
             #code.interact(local=locals())
     else:
-        #print("False")
-        for step in np.arange(1,steps,1):
-            bandit_drifts[:,step] = bandit_drifts[:,step-1] + bandit_drifts[:,step]
+        if abrupt_change:
+            for step in np.arange(1,500,1):
+                bandit_drifts[:,step] = bandit_drifts[:,step-1] + bandit_drifts[:,step]
+            change_reward_values = rg.normal(mu,sigma,10)
+            change_reward_values = np.array(change_reward_values)
+            bandit_drifts[:,501] = change_reward_values
+            for step in np.arange(502,steps,1):
+                bandit_drifts[:,step] = bandit_drifts[:,step-1] + bandit_drifts[:,step]
+        else:
+            for step in np.arange(1,steps,1):
+                bandit_drifts[:,step] = bandit_drifts[:,step-1] + bandit_drifts[:,step]
     
     def normal(mu):
         return rg.normal(mu,1)
     
+    optimal_bandits = []
+    for step in np.arange(0,steps,1):
+        optimal_bandits.append(bandit_drifts[:,step].argmax())
+    optimal_bandits = np.array(optimal_bandits)
+    
     mu_array = bandit_drifts
     bandit_drifts = np.vectorize(normal)(bandit_drifts)
     
-    return bandit_drifts,optimal_bandit,mu_array
+    return bandit_drifts,optimal_bandit,mu_array,optimal_bandits
 
 def standard_rewards(steps):
     
@@ -80,7 +94,7 @@ for sim in np.arange(0,1000,1):
     
     
     if drift:
-        rewards_array, optimal_bandit,mu_array = create_drift(2000)
+        rewards_array, optimal_bandit,mu_array,optimal_bandits = create_drift(2000)
     else:
         rewards_array, optimal_bandit,mu_array = standard_rewards(2000)
         
@@ -144,6 +158,8 @@ for sim in np.arange(0,1000,1):
             optimal_action.append(1)
         else:
             optimal_action.append(0)
+        if drift:
+            optimal_bandit = optimal_bandits[step]
         if best_choice_selected == optimal_bandit:
             optimal_bandit_action.append(1)
         else:
