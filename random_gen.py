@@ -32,7 +32,7 @@ config = Config(epsilon=.1, optimistic_values=0, gradient_bandit_flag=0, alpha=.
 epsilon = .1
 set_optimistic_values = 0
 gradient_bandit = 0
-drift=1
+drift=0
 alpha = .1
 
 def choose_max(choices):
@@ -116,7 +116,7 @@ class ActionValue:
         
         if self.gradient_bandit:
             bandit_index = choose_max(estimates)
-            bandit_reward = rewards(bandit_index)
+            bandit_reward = rewards[bandit_index]
         else:
             if np.random.uniform() < 1.0-self.epsilon:
                 bandit_index = choose_max(estimates)
@@ -129,7 +129,7 @@ class ActionValue:
      
 class Estimation:
     
-    def __init__(self, actionvalue, estimates,soft_max, steps):
+    def __init__(self, actionvalue, estimates,soft_max):
         
         self.actionvalue = actionvalue
         
@@ -137,12 +137,12 @@ class Estimation:
         self.gradient_estimates = gradient_estimates
         self.choice_estimates = choice_estimates
         self.soft_max = soft_max
-        self.steps = steps
+        self.steps = np.zeros(10) + 1
         
     def incremental_mean(self, estimates, reward, i):
         
         estimates[i] = estimates[i] + 1/self.steps[i]*(reward-estimates[i])
-        
+        #code.interact(banner="im",local=locals())
         return estimates
         
     def bandit_gradient(self, estimates, reward, average_award, i):
@@ -156,14 +156,15 @@ class Estimation:
                 estimates[index] = estimates[index] - alpha*(reward-average_award)*self.soft_max[index]
                 
         return estimates
-        
-        
+              
     def update_estimates(self, estimates, reward, average_award, i):
         
         if self.actionvalue.gradient_bandit:
             estimates = self.bandit_gradient(estimates, reward, average_award, i)
         else:
             estimates = self.incremental_mean(estimates, reward, i)
+            
+        self.steps[i] = self.steps[i] + 1
             
         return estimates
             
@@ -186,7 +187,7 @@ for sim in np.arange(0,1000,1):
     if set_optimistic_values:
         estimates = estimates + np.percentile(rewards_array[optimal_bandit],99.5)
     
-    steps = np.zeros(10)
+    #steps = np.zeros(10)
     #steps = steps 
     
     greedy_average_award = []
@@ -197,7 +198,9 @@ for sim in np.arange(0,1000,1):
     optimal_action = []
     
     optimal_bandit_action = []
-   
+    
+    actions = ActionValue(config)
+    estimate = Estimation(actions, estimates, soft_max)
 
     for step in np.arange(0,2000,1):
         # step through 10 sampled distributions one sample at a time
@@ -207,24 +210,11 @@ for sim in np.arange(0,1000,1):
         best_award.append(greward)
         greward_selected = step_rewards.argmax() # index
         
-        actions = ActionValue(config)
-        best_choice_selected, best_choice = actions.select_bandit(step_rewards, estimates)
         
-        """
-        if gradient_bandit:
-            best_choice_selected = choose_max(gradient_estimates)
-            best_choice = step_rewards[best_choice_selected]
-        # best estimate choice at every step
-        else:
-            if np.random.uniform() < 1.0-epsilon:
-                best_choice_selected = choose_max(choice_estimates)
-                #code.interact(banner="choose",local=locals())
-                best_choice = step_rewards[best_choice_selected]
-            else:
-                random_choice  = random.randrange(10)
-                best_choice = step_rewards[random_choice]
-                best_choice_selected = random_choice    
-        """
+        best_choice_selected, best_choice = actions.select_bandit(step_rewards, estimates)
+        estimates = estimate.update_estimates(estimates, best_choice, average_award, best_choice_selected)
+        
+        
         # gather optimal action %
         if best_choice_selected == greward_selected:
             optimal_action.append(1)
@@ -238,30 +228,13 @@ for sim in np.arange(0,1000,1):
             optimal_bandit_action.append(0)
         optimal_per = sum(optimal_action)/len(optimal_action)
         
-        # build running tally of greedy estimates
-        #greedy_estimates[greward_selected] =  greedy_estimates[greward_selected] + 1/steps[greward_selected]*(greward-greedy_estimates[greward_selected])
-        # build running tally of each arm estimates
-        steps[best_choice_selected] = steps[best_choice_selected] + 1
         #[best_choice_selected] = choice_estimates[best_choice_selected] + 1/steps[best_choice_selected]*(best_choice-choice_estimates[best_choice_selected])
         average_award = average_award + 1/(step+1)*(best_choice-average_award)
         
-        estimate = Estimation(actions, estimates, soft_max, steps)
-        estimates = estimate.update_estimates(estimates, best_choice, average_award, best_choice_selected)
         
-        """
-        # gradient bandit
-        if gradient_bandit:
-            e_sum = sum(math.e**np.array(gradient_estimates))
-            #print("e_sum",e_sum)
-            for index in np.arange(0,10,1):
-                soft_max[index] = math.e**(gradient_estimates[index])/e_sum
-            #print("soft max",soft_max)
-            for index in np.arange(0,10,1):
-                if index == best_choice_selected:
-                    gradient_estimates[best_choice_selected] = gradient_estimates[best_choice_selected] + alpha*(best_choice-average_award)*(1-soft_max[best_choice_selected])
-                else:
-                    gradient_estimates[index] = gradient_estimates[index] - alpha*(best_choice-average_award)*soft_max[index]
-        """
+        
+        
+        
         #greedy_average_award.append(greedy_estimates[greward_selected])
         choice_average_award.append(best_choice)
         
