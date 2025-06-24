@@ -109,8 +109,6 @@ class ActionValue:
         self.gradient_bandit = config.gradient_bandit_flag
         self.alpha = config.alpha
         
-        #self.gradient_estimates = np.zeros(10)
-        #self.choice_estimates = np.zeros(10)
         
     def select_bandit(self, rewards, estimates):
         
@@ -129,14 +127,13 @@ class ActionValue:
      
 class Estimation:
     
-    def __init__(self, actionvalue, estimates,soft_max):
+    def __init__(self, actionvalue):
         
         self.actionvalue = actionvalue
-        
-        self.estimates = estimates
-        self.gradient_estimates = gradient_estimates
-        self.choice_estimates = choice_estimates
-        self.soft_max = soft_max
+        self.estimates = np.zeros(10)
+        if set_optimistic_values:
+            self.estimates = estimates + np.percentile(rewards_array[optimal_bandit],99.5)
+        self.soft_max = np.zeros(10)
         self.steps = np.zeros(10) + 1
         
     def incremental_mean(self, estimates, reward, i):
@@ -178,14 +175,12 @@ for sim in np.arange(0,1000,1):
     else:
         rewards_array, optimal_bandit,mu_array = standard_rewards(2000)
         
-    estimates = np.zeros(10)
-    choice_estimates = np.zeros(10)
-    gradient_estimates = np.zeros(10)
+    #estimates = np.zeros(10)
     average_award = 0
-    soft_max = np.zeros(10)
+    #soft_max = np.zeros(10)
     
-    if set_optimistic_values:
-        estimates = estimates + np.percentile(rewards_array[optimal_bandit],99.5)
+    #if set_optimistic_values:
+        #estimates = estimates + np.percentile(rewards_array[optimal_bandit],99.5)
     
     #steps = np.zeros(10)
     #steps = steps 
@@ -200,7 +195,7 @@ for sim in np.arange(0,1000,1):
     optimal_bandit_action = []
     
     actions = ActionValue(config)
-    estimate = Estimation(actions, estimates, soft_max)
+    estimate = Estimation(actions)
 
     for step in np.arange(0,2000,1):
         # step through 10 sampled distributions one sample at a time
@@ -211,8 +206,8 @@ for sim in np.arange(0,1000,1):
         greward_selected = step_rewards.argmax() # index
         
         
-        best_choice_selected, best_choice = actions.select_bandit(step_rewards, estimates)
-        estimates = estimate.update_estimates(estimates, best_choice, average_award, best_choice_selected)
+        best_choice_selected, best_choice = actions.select_bandit(step_rewards, estimate.estimates)
+        estimates = estimate.update_estimates(estimate.estimates, best_choice, average_award, best_choice_selected)
         
         
         # gather optimal action %
