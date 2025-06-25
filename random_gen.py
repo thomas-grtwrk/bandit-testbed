@@ -223,9 +223,9 @@ class Optimality:
             
 class BanditsRun:
     
-    def __init__(self):
+    def __init__(self, config):
         
-        self.config = Config(epsilon=0.01, optimistic_values=0, gradient_bandit_flag=0, alpha=.1)
+        self.config = config
         self.rewards = Rewards()
         self.rewards_array, self.optimal_bandit, self.mu_array, self.optimal_bandits = self.rewards.generate_rewards()
         self.actions = ActionValue(self.config)
@@ -235,11 +235,8 @@ class BanditsRun:
         
     def start(self):
         
-        
         for step in np.arange(0,2000,1):
-            
             step_rewards = self.rewards_array[:,step]
-            
             index, reward = self.actions.select_bandit(step_rewards,
                                                   self.estimate.estimates,
                                                   step)
@@ -257,8 +254,9 @@ class BanditsRun:
 
 class Testbed:
     
-    def __init__(self, number_of_runs):
+    def __init__(self, number_of_runs, config):
         
+        self.config = config
         self.number_of_runs = number_of_runs
         self.all_runs = []
         self.all_optimal_actions = []
@@ -268,7 +266,7 @@ class Testbed:
         
         for each_run in np.arange(0,self.number_of_runs):
             
-            run = BanditsRun()
+            run = BanditsRun(self.config)
             run.start()
             
             self.all_runs.append(run.actions.reward_recieved)
@@ -297,65 +295,9 @@ class Testbed:
         axs[0].set_ylabel('Average Reward')
         axs[1].set_ylabel('Optimal Value')
         axs[2].set_ylabel('Optimal Arm')
-        
-test = Testbed(1000)
+
+config = Config(epsilon=0.01, optimistic_values=0, gradient_bandit_flag=0, alpha=.1)
+test = Testbed(1000, config)
 test.run_testbed()
 test.generate_plots()
         
-        
-        
-
-"""         
-for sim in np.arange(0,1000,1):
-
-    rewards = Rewards()
-    rewards_array, optimal_bandit, mu_array, optimal_bandits = rewards.generate_rewards()
-    actions = ActionValue(config)
-    estimate = Estimation(actions)
-    optimal = Optimality()
-
-    for step in np.arange(0,2000,1):
-        
-        step_rewards = rewards_array[:,step]
-        
-        index, reward = actions.select_bandit(step_rewards,
-                                              estimate.estimates,
-                                              step)
-        estimate.update_estimates(estimate.estimates,
-                                              reward,
-                                              actions.average_award,
-                                              index)
-        optimal.determine_optimality(step_rewards,
-                                     index,
-                                     reward,
-                                     optimal_bandits,
-                                     step,
-                                     mu_array,
-                                     rewards.drift)
-        
-    all_runs.append(actions.reward_recieved)
-    all_optimal_actions.append(optimal.optimal_action)
-    all_optimal_bandit_options.append(optimal.optimal_bandit)
-    
-
-results = np.array(all_runs)
-results_average = results.mean(axis=0)
-#plt.plot(results_average)
-
-oa = np.array(all_optimal_actions)
-oasum = oa.sum(axis=0)
-per = oasum/1000
-
-oab = np.array(all_optimal_bandit_options)
-oabsum = oab.sum(axis=0)
-oab_per = oabsum/1000
-
-fig, axs = plt.subplots(nrows=3, ncols=1, figsize=(9, 9))
-axs[0].plot(results_average)
-axs[1].plot(per)
-axs[2].plot(oab_per)
-fig.suptitle('10-armed Bandit Testbed')
-axs[0].set_ylabel('Average Reward')
-axs[1].set_ylabel('Optimal Value')
-axs[2].set_ylabel('Optimal Arm')
-"""
