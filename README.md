@@ -14,11 +14,11 @@ the algorithm selected the optimal value (the max reward at each time step over 
 and the optimal arm (the optimal bandit based on the best actual mean of all bandit distributions.)
 
 
-'''
+```
 config = Config(epsilon=0, optimistic_values=False,
                 gradient_bandit_flag=False, alpha=.1, drift=False,
                 total_rewards=2000, reversion=False, abrupt_change=False)
 test = Testbed(1000, config)
 test.run_testbed()
 test.generate_plots()
-'''
+```
