@@ -20,20 +20,19 @@ all_optimal_bandit_options = []
 
 class Config:
     
-    def __init__(self, epsilon=0, optimistic_values=0, gradient_bandit_flag=0, alpha=.1):
+    def __init__(self, epsilon=0, optimistic_values=0,
+                 gradient_bandit_flag=False, alpha=.1, drift=False,
+                 total_rewards=2000, reversion=False, abrupt_change=False):
         
         self.epsilon = epsilon
         self.optimistic_values = optimistic_values
         self.gradient_bandit_flag = gradient_bandit_flag
         self.alpha = alpha
+        self.drift = drift
+        self.total_rewards = total_rewards
+        self.reversion = reversion
+        self.abrupt_change = abrupt_change
         
-config = Config(epsilon=0.01, optimistic_values=0, gradient_bandit_flag=0, alpha=.1)
-
-#epsilon = .1
-#set_optimistic_values = 0
-#gradient_bandit = 0
-#drift=0
-#alpha = .1
 
 def choose_max(choices):
     max_indexs = np.argwhere(choices == np.amax(choices))
@@ -47,20 +46,20 @@ def choose_max(choices):
 
 class Rewards:
     
-    def __init__(self,total_rewards=2000, drift=False, reversion=False, abrupt_change=False):
+    def __init__(self,config):
         
-        self.total_rewards = total_rewards
-        self.drift = drift
-        self.reversion = reversion
-        self.abrupt_change = abrupt_change
+        self.total_rewards = config.total_rewards
+        self.drift = config.drift
+        self.reversion = config.reversion
+        self.abrupt_change = config.abrupt_change
         
-    def create_drift(self,steps, reversion=False, abrupt_change=True):
+    def create_drift(self,steps, reversion=False, abrupt_change=False):
         
         mu, sigma = 0, 1.0 # mean and standard deviation
         initial_reward_values = rg.normal(mu,sigma,10)
         initial_reward_values = np.array(initial_reward_values)
         optimal_bandit = initial_reward_values.argmax()
-        
+        self.optimal_bandit_value = initial_reward_values.max()
         bandit_drifts = [rg.normal(0,.01**2,steps) for i in np.arange(0,10,1)]
         bandit_drifts = np.array(bandit_drifts)
         
@@ -105,6 +104,8 @@ class Rewards:
         # Sampling distribution with given actual reward as mean
         rewards = [rg.normal(mu_i,sigma,steps) for mu_i in actual_reward_values]
         optimal_bandit = actual_reward_values.argmax()
+        self.optimal_bandit_value = actual_reward_values.max()
+        # foolish placeholder to keep return values consistent
         optimal_bandits = np.zeros(steps)
         optimal_bandits = optimal_bandit
         rewards_array = np.array(rewards)
@@ -114,7 +115,7 @@ class Rewards:
     def generate_rewards(self):
         
         if self.drift:
-            rewards_array, optimal_bandits,mu_array,optimal_bandits = self.create_drift(self.total_rewards)
+            rewards_array, optimal_bandit,mu_array,optimal_bandits = self.create_drift(self.total_rewards)
         else:
             rewards_array, optimal_bandit, mu_array, optimal_bandits = self.standard_rewards(self.total_rewards)
 
@@ -154,12 +155,12 @@ class ActionValue:
      
 class Estimation:
     
-    def __init__(self, actionvalue):
+    def __init__(self, actionvalue, rewards):
         
         self.actionvalue = actionvalue
         self.estimates = np.zeros(10)
         if actionvalue.optimistic_values:
-            self.estimates = estimates + np.percentile(rewards_array[optimal_bandit],99.5)
+            self.estimates = self.estimates + np.percentile(rewards.optimal_bandit_value,99.5)
         self.soft_max = np.zeros(10)
         self.steps = np.zeros(10) + 1
         
@@ -226,10 +227,10 @@ class BanditsRun:
     def __init__(self, config):
         
         self.config = config
-        self.rewards = Rewards()
+        self.rewards = Rewards(config)
         self.rewards_array, self.optimal_bandit, self.mu_array, self.optimal_bandits = self.rewards.generate_rewards()
         self.actions = ActionValue(self.config)
-        self.estimate = Estimation(self.actions)
+        self.estimate = Estimation(self.actions, self.rewards)
         self.optimal = Optimality()
         
         
@@ -296,7 +297,8 @@ class Testbed:
         axs[1].set_ylabel('Optimal Value')
         axs[2].set_ylabel('Optimal Arm')
 
-config = Config(epsilon=0.01, optimistic_values=0, gradient_bandit_flag=0, alpha=.1)
+config = Config(epsilon=0.01, optimistic_values=0,
+                gradient_bandit_flag=0, alpha=.1, drift=True)
 test = Testbed(1000, config)
 test.run_testbed()
 test.generate_plots()
