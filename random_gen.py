@@ -7,18 +7,28 @@ Created on Fri May 30 12:53:54 2025
 """
 
 import numpy as np
-from numpy.random import Generator, PCG64
 import matplotlib.pyplot as plt
 import random
 import math
-import code
 
-rg = Generator(PCG64())
-all_runs = []
-all_optimal_actions = []
-all_optimal_bandit_options = []
-
+"""
+config parameters for action-value methods and rewards creation
+"""
 class Config:
+    
+    ######################################################################
+    # 
+    # epsilon: epsilon-greedy value where epsilon gives probability of
+    #          randomly selecting from bandtis
+    # optimistic_values: initializes estimates with high value rewards
+    # gradient_bandit_flag: use gradient bandit algorithm
+    # alpha: parameter for gradient bandit algorithm
+    # drift: creates drift in the creation of the reward array
+    # total_rewards: sets the number of bandit pulls
+    # reversion: creates revrsion of means in the rewards array
+    # abrupt_change: changes means of rewards at a set point
+    #
+    ######################################################################
     
     def __init__(self, epsilon=0, optimistic_values=0,
                  gradient_bandit_flag=False, alpha=.1, drift=False,
@@ -33,21 +43,15 @@ class Config:
         self.reversion = reversion
         self.abrupt_change = abrupt_change
         
-
-def choose_max(choices):
-    max_indexs = np.argwhere(choices == np.amax(choices))
-    max_indexs = max_indexs.flatten().tolist()
-    number_of_max = len(max_indexs)
-    #code.interact(banner="in choose max",local=locals())
-    if number_of_max == 1:
-        return max_indexs[0]
-    else:
-        return max_indexs[random.randrange(number_of_max)]
-
+"""
+builds distributional arrays for possible reward values to select
+"""
 class Rewards:
     
     def __init__(self,config):
         
+        self.rng = np.random.default_rng()
+        self.sd_rng = np.random.default_rng(seed=7)
         self.total_rewards = config.total_rewards
         self.drift = config.drift
         self.reversion = config.reversion
@@ -56,24 +60,22 @@ class Rewards:
     def create_drift(self,steps, reversion=False, abrupt_change=False):
         
         mu, sigma = 0, 1.0 # mean and standard deviation
-        initial_reward_values = rg.normal(mu,sigma,10)
+        initial_reward_values = self.rng.normal(mu,sigma,10)
         initial_reward_values = np.array(initial_reward_values)
         optimal_bandit = initial_reward_values.argmax()
         self.optimal_bandit_value = initial_reward_values.max()
-        bandit_drifts = [rg.normal(0,.01**2,steps) for i in np.arange(0,10,1)]
+        bandit_drifts = [self.sd_rng.normal(0,.01**2,steps) for i in np.arange(0,10,1)]
         bandit_drifts = np.array(bandit_drifts)
         
         bandit_drifts[:,0] = bandit_drifts[:,0] + initial_reward_values
         if reversion:
-            #print("True")
             for step in np.arange(1,steps,1):
                 bandit_drifts[:,step] = .5 * bandit_drifts[:,step-1] + bandit_drifts[:,step]
-                #code.interact(local=locals())
         else:
             if abrupt_change:
                 for step in np.arange(1,500,1):
                     bandit_drifts[:,step] = bandit_drifts[:,step-1] + bandit_drifts[:,step]
-                change_reward_values = rg.normal(mu,sigma,10)
+                change_reward_values = self.sd_rng.normal(mu,sigma,10)
                 change_reward_values = np.array(change_reward_values)
                 bandit_drifts[:,501] = change_reward_values
                 for step in np.arange(502,steps,1):
@@ -83,7 +85,7 @@ class Rewards:
                     bandit_drifts[:,step] = bandit_drifts[:,step-1] + bandit_drifts[:,step]
     
         def normal(mu):
-            return rg.normal(mu,1)
+            return self.rng.normal(mu,1)
         
         optimal_bandits = []
         for step in np.arange(0,steps,1):
@@ -99,28 +101,31 @@ class Rewards:
         
         mu, sigma = 0, 1.0 # mean and standard deviation
         # Setting actual reward values from normal distribution with 10 bandits
-        actual_reward_values = rg.normal(mu,sigma,10)
+        actual_reward_values = self.rng.normal(mu,sigma,10)
         
         # Sampling distribution with given actual reward as mean
-        rewards = [rg.normal(mu_i,sigma,steps) for mu_i in actual_reward_values]
+        rewards = [self.rng.normal(mu_i,sigma,steps) for mu_i in actual_reward_values]
         optimal_bandit = actual_reward_values.argmax()
         self.optimal_bandit_value = actual_reward_values.max()
         # foolish placeholder to keep return values consistent
         optimal_bandits = np.zeros(steps)
         optimal_bandits = optimal_bandit
         rewards_array = np.array(rewards)
-        #code.interact(local=locals())
+
         return rewards_array,optimal_bandit,actual_reward_values,optimal_bandits
     
     def generate_rewards(self):
         
         if self.drift:
-            rewards_array, optimal_bandit,mu_array,optimal_bandits = self.create_drift(self.total_rewards)
+            rewards_array, optimal_bandit,mu_array,optimal_bandits = self.create_drift(self.total_rewards, reversion=self.reversion, abrupt_change=self.abrupt_change)
         else:
             rewards_array, optimal_bandit, mu_array, optimal_bandits = self.standard_rewards(self.total_rewards)
 
         return rewards_array, optimal_bandit, mu_array, optimal_bandits
 
+"""
+impliments the acion-value methods to select bandit arms based on rewards
+"""
 class ActionValue:
     
     def __init__(self, config):
@@ -133,16 +138,21 @@ class ActionValue:
         self.average_award = 0
         self.reward_recieved = []
         
+    def choose_max(self,choices):
+        max_indexs = np.argwhere(choices == np.amax(choices))
+        max_indexs = max_indexs.flatten().tolist()
+        number_of_max = len(max_indexs)
+        if number_of_max == 1:
+            return max_indexs[0]
+        else:
+            return max_indexs[random.randrange(number_of_max)]
         
     def select_bandit(self, rewards, estimates, step):
         """
-        if self.gradient_bandit:
-            bandit_index = choose_max(estimates)
-            bandit_reward = rewards[bandit_index]
-        else:
+        
         """
         if np.random.uniform() < 1.0-self.epsilon:
-            bandit_index = choose_max(estimates)
+            bandit_index = self.choose_max(estimates)
             bandit_reward = rewards[bandit_index]
         else:
             bandit_index = random.randrange(10)
@@ -152,7 +162,10 @@ class ActionValue:
         self.reward_recieved.append(bandit_reward)
                 
         return bandit_index, bandit_reward
-     
+
+"""
+handles estimation accounting as rewards are recieved for bandit run
+"""    
 class Estimation:
     
     def __init__(self, actionvalue, rewards):
@@ -167,7 +180,6 @@ class Estimation:
     def incremental_mean(self, estimates, reward, i):
         
         estimates[i] = estimates[i] + 1/self.steps[i]*(reward-estimates[i])
-        #code.interact(banner="im",local=locals())
         return estimates
         
     def bandit_gradient(self, estimates, reward, average_award, i):
@@ -190,9 +202,10 @@ class Estimation:
             estimates = self.incremental_mean(estimates, reward, i)
             
         self.steps[i] = self.steps[i] + 1
-            
-        #return estimates
-            
+
+"""
+tracks bandit arm selection to determine optimal selection
+"""                    
 class Optimality:
 
     def __init__(self):
@@ -221,7 +234,10 @@ class Optimality:
             self.optimal_bandit.append(1)
         else:
             self.optimal_bandit.append(0)
-            
+
+"""
+runs a single bandit simulation
+"""
 class BanditsRun:
     
     def __init__(self, config):
@@ -253,6 +269,9 @@ class BanditsRun:
                                          self.mu_array,
                                          self.rewards.drift)
 
+"""
+runs multiple bandit simulations to gauge methodologies utility
+"""
 class Testbed:
     
     def __init__(self, number_of_runs, config):
@@ -278,7 +297,6 @@ class Testbed:
         
         results = np.array(self.all_runs)
         results_average = results.mean(axis=0)
-        #plt.plot(results_average)
 
         oa = np.array(self.all_optimal_actions)
         oasum = oa.sum(axis=0)
@@ -297,9 +315,117 @@ class Testbed:
         axs[1].set_ylabel('Optimal Value')
         axs[2].set_ylabel('Optimal Arm')
 
-config = Config(epsilon=0.01, optimistic_values=0,
-                gradient_bandit_flag=0, alpha=.1, drift=True)
-test = Testbed(1000, config)
-test.run_testbed()
-test.generate_plots()
-        
+"""
+Running Testbed
+
+config1 = Config(epsilon=0.0, optimistic_values=False,
+                gradient_bandit_flag=False, alpha=.1, drift=False,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+test1 = Testbed(1000, config1)
+test1.run_testbed()
+#test1.generate_plots()
+
+config2 = Config(epsilon=0.01, optimistic_values=False,
+                gradient_bandit_flag=False, alpha=.1, drift=False,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test2 = Testbed(1000, config2)
+test2.run_testbed()
+#test2.generate_plots()
+
+config3 = Config(epsilon=0.05, optimistic_values=False,
+                gradient_bandit_flag=False, alpha=.1, drift=False,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test3 = Testbed(1000, config3)
+test3.run_testbed()
+#test3.generate_plots()
+
+config4 = Config(epsilon=0.1, optimistic_values=False,
+                gradient_bandit_flag=False, alpha=.1, drift=False,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test4 = Testbed(1000, config4)
+test4.run_testbed()
+#test4.generate_plots()
+
+config5 = Config(epsilon=0, optimistic_values=True,
+                gradient_bandit_flag=False, alpha=.1, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test5 = Testbed(1000, config5)
+test5.run_testbed()
+
+config6 = Config(epsilon=0, optimistic_values=True,
+                gradient_bandit_flag=True, alpha=.1, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test6 = Testbed(1000, config6)
+test6.run_testbed()
+
+config7 = Config(epsilon=0, optimistic_values=True,
+                gradient_bandit_flag=True, alpha=.2, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test7 = Testbed(1000, config7)
+test7.run_testbed()
+
+config8 = Config(epsilon=0, optimistic_values=True,
+                gradient_bandit_flag=True, alpha=.4, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test8 = Testbed(1000, config8)
+test8.run_testbed()
+
+config9 = Config(epsilon=0, optimistic_values=True,
+                gradient_bandit_flag=True, alpha=.8, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test9 = Testbed(1000, config9)
+test9.run_testbed()
+
+config10 = Config(epsilon=0, optimistic_values=True,
+                gradient_bandit_flag=True, alpha=.05, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test10 = Testbed(1000, config10)
+test10.run_testbed()
+
+config11 = Config(epsilon=0, optimistic_values=False,
+                gradient_bandit_flag=True, alpha=.02, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=False)
+
+test11 = Testbed(1000, config11)
+test11.run_testbed()
+
+
+config12 = Config(epsilon=0, optimistic_values=False,
+                gradient_bandit_flag=True, alpha=.02, drift=True,
+                total_rewards=2000, reversion=False, abrupt_change=True)
+
+test12 = Testbed(1000, config12)
+test12.run_testbed()
+
+config13 = Config(epsilon=.1, optimistic_values=False,
+                gradient_bandit_flag=False, alpha=.02, drift=True,
+                total_rewards=2000, reversion=True, abrupt_change=False)
+
+test13 = Testbed(1000, config13)
+test13.run_testbed()
+
+
+config14 = Config(epsilon=0, optimistic_values=False,
+                gradient_bandit_flag=False, alpha=.02, drift=False,
+                total_rewards=2000, reversion=True, abrupt_change=False)
+
+test14 = Testbed(1000, config14)
+test14.run_testbed()
+
+config15 = Config(epsilon=0, optimistic_values=False,
+                gradient_bandit_flag=True, alpha=.05, drift=False,
+                total_rewards=2000, reversion=True, abrupt_change=False)
+
+test15 = Testbed(1000, config15)
+test15.run_testbed()
+"""
+
